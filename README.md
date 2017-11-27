@@ -1,0 +1,2 @@
+# Navigation
+Inertial navigation algorithm
