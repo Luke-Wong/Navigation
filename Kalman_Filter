@@ -1,0 +1,113 @@
+/* X(k+1) = F(k+1, k) * X(k) + B(k)*u(k) */
+
+float F[2][2] = {
+									{1, 0.001f}, 
+									{0,      1},
+								};
+
+float F_T[2][2] = {
+									{1,      0}, 
+									{0.001f, 1},
+								};
+/* U = B*u */
+float U[2] = {0, 0};
+								
+float B[2] = {
+								(0.001f*0.001f)*0.5f, 
+								 0.001f,
+						 };
+
+float u = 0.0f;
+
+/* covariance */
+float P_last[2][2] = {
+									{100, 0},
+									{0,   2},
+};
+						 
+float P[2][2] = {
+									{100, 0},
+									{0,   2},
+};
+
+float H[2] = {1, 0};
+
+float X[2] = {
+						0,
+						0,
+					};
+
+float K[2] = {
+						0,
+						0,
+					};
+
+float I[2][2] = {
+									{1, 0},
+									{0, 1},
+								};
+/* 量测方程 Y = HX + v*/
+float Y;
+
+/* 量测噪声 */
+float v = 30;
+float Q[2][2] = {
+									{0.001f, 0},
+									{0, 0.003f},
+								};
+					
+float R = 1.0f;
+
+uint8_t kalman_init = 0;
+
+
+
+
+// Reference: https://wenku.baidu.com/view/fae89ac86137ee06eff918f0.html
+	if (!kalman_init){
+		kalman_init = 1;
+		
+		// init hight to zero.
+		X[0] = 0;//1900;
+		
+		// init velocity.z to zero.
+		X[1] = 0;//10;
+		
+	}
+	
+	u = nav.accel.z;
+	U[0] = B[0] * u;
+	U[1] = B[1] * u;
+	/* X0 = F00*X0 + F01*X1 + U0 */
+	X[0] = X[0]*F[0][0] + X[1]*F[0][1] + U[0];// Xt = Xt-1 + Vt-1*t + 1/2*a*t^2.
+	/* X1 = F10*X0 + F11*X1 + U1 */
+	X[1] = X[0]*F[1][0] + X[1]*F[1][1] + U[1];// Vt = Vt-1 + a*t.
+	
+	velocityErrorInt.y += (nav.velocity.y - nav.gpsVel.y) * 0.001f;
+	velocityErrorInt.x = constrain_float(velocityErrorInt.x, -2, +2);
+	Q[0][0] = abs((float)nav.baroAlt - X[0]) * 0.00001f;
+	Q[1][1] = Q[0][0] * 0.3f;
+	/* P = F*P*F(T) + Q */
+	P_last[0][0] = (F[0][0]*P[0][0] + F[0][1]*P[1][0])*F_T[0][0] + (F[0][0]*P[0][1] + F[0][1]*P[1][1])*F_T[1][0] + Q[0][0];
+	P_last[0][1] = (F[0][0]*P[0][0] + F[0][1]*P[1][0])*F_T[0][1] + (F[0][0]*P[0][1] + F[0][1]*P[1][1])*F_T[1][1] + Q[0][1];
+	P_last[1][0] = (F[1][0]*P[0][0] + F[1][1]*P[1][0])*F_T[0][0] + (F[1][0]*P[0][1] + F[1][1]*P[1][1])*F_T[1][0] + Q[1][0];
+	P_last[1][1] = (F[1][0]*P[0][0] + F[1][1]*P[1][0])*F_T[0][1] + (F[1][0]*P[0][1] + F[1][1]*P[1][1])*F_T[1][1] + Q[1][1];
+	
+	/* 滤波增益 */
+	/*  */
+	K[0] = (P_last[0][0]*H[0] + P_last[0][1]*H[1]) / ( ((H[0]*P_last[0][0] + H[1]*P_last[1][0])*H[0]) + (H[0]*P_last[0][1] + H[1]*P_last[1][1])*H[1] + R);
+	K[1] = (P_last[1][0]*H[0] + P_last[1][1]*H[1]) / ( ((H[0]*P_last[0][0] + H[1]*P_last[1][0])*H[0]) + (H[0]*P_last[0][1] + H[1]*P_last[1][1])*H[1] + R);
+	
+	/* 滤波计算 */
+	Y = H[0]*nav.baroAlt + H[1]*nav.baroVel;
+	
+	X[0] = X[0] + K[0]*(Y - (H[0]*X[0] + H[1]*X[1]));
+	X[1] = X[1] + K[1]*(Y - (H[0]*X[0] + H[1]*X[1]));
+	
+	P[0][0] = (1-K[0])*P_last[0][0];
+	P[0][1] = (1-K[0])*P_last[0][1];
+	P[1][0] = (-K[1])*P_last[0][0] + P_last[1][0];
+	P[1][1] = (-K[1])*P_last[0][1] + P_last[1][1];
+  
+  
+  
